@@ -1,1 +1,180 @@
-css
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@200;700&display=swap');
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    margin: 0;
+    background-color: #fff;
+    color: #333;
+}
+
+.page-container {
+    display: flex;
+    max-width: 1100px;
+    margin: auto;
+}
+
+/* --- Sidebar Styles --- */
+.sidebar {
+    width: 220px;
+    padding: 20px;
+    padding-top: 30px;
+    border-right: 1px solid #e0e0e0;
+    flex-shrink: 0;
+}
+
+.sidebar h2 {
+    font-size: 24px;
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.category-group {
+    margin-bottom: 20px;
+}
+
+.category-group h3 {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 15px;
+}
+
+.category-group hr {
+    border: 0;
+    height: 1px;
+    background-color: #e0e0e0;
+    margin-top: 25px;
+}
+
+.radio-item {
+    display: block;
+    position: relative;
+    padding-left: 35px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    font-size: 16px;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Hide the browser's default radio button */
+.radio-item input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* Create a custom radio button */
+.checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 22px;
+    width: 22px;
+    background-color: #fff;
+    border: 2px solid #000;
+    border-radius: 50%;
+}
+
+/* When the radio button is checked, add a purple background */
+.radio-item input:checked ~ .checkmark {
+    background-color: #e086d3; /* 보라색 배경 */
+    border: 2px solid #e086d3;
+}
+
+/* Create the indicator (the dot/circle) - hidden when not checked */
+.checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+}
+
+/* Show the indicator (white inner circle) when checked */
+.radio-item input:checked ~ .checkmark:after {
+    display: block;
+}
+
+/* Style the indicator */
+.radio-item .checkmark:after {
+    top: 5px;
+    left: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+}
+
+/* --- Main Content Styles --- */
+.main-content {
+    flex-grow: 1;
+    padding: 20px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f3e5f5; /* 연한 보라색 배경 */
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.header-title,
+.header-link {
+    font-weight: bold;
+}
+
+.main-title {
+    font-size: 28px;
+    font-weight: bold;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    color: #000;
+}
+
+.name-list {
+    color: #888;
+    font-size: 15px;
+    line-height: 1.7;
+    margin-bottom: 40px;
+}
+
+.profile-section {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid #eee;
+}
+
+.profile-section:last-of-type {
+    border-bottom: none;
+}
+
+.profile-content-wrapper {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.profile-text-content {
+    flex: 1;
+}
+
+.section-number {
+    font-size: 20px;
+    font-weight: bold;
+    color: #555;
+    margin: 0;
+}
+
+.section-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin: 5px 0 15px 0;
+    color: #000;
+}
+
+.info {
+    font-size: 14px;
+    line-height: 1
