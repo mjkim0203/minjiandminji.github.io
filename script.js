@@ -4,9 +4,8 @@ const loadingMessage = document.getElementById('loadingMessage');
 let canvas;
 let displaySize;
 
-// --- [수정됨] ---
-const MODEL_URL = './models'; // ✅ 올바른 경로
-// ---------------
+// GitHub 저장소의 'models' 폴더를 참조 (상대 경로)
+const MODEL_URL = './models'; 
 
 // 모델 인스턴스
 let objectDetector;
@@ -18,7 +17,7 @@ let objectDetections = [];
 let poses = [];
 
 // 안내 문구 관련
-let currentMessage = "카메라를 바라보세요";
+let currentMessage = "카메라를 바라보세요"; // 초기 메시지
 let messageTimer;
 
 // 1. 모델 로드
@@ -28,21 +27,23 @@ async function loadModels() {
 
     try {
         // 1-1. face-api (얼굴 기준점)
-        // [수정됨] 로컬 경로(MODEL_URL) 사용
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        console.log("얼굴 모델 완료!");
         
-        // 1-2. coco-ssd (사물: 모자)
+        // 1-2. coco-ssd (사물: 모자) - 'cocossd' 오타 수정됨
         objectDetector = await ml5.objectDetector('cocossd');
+        console.log("사물 모델 완료!");
         
         // 1-3. PoseNet (신체 포즈: 팔 들기)
-        poseNet = await ml5.poseNet(video, () => console.log('PoseNet 모델 로드 완료!'));
+        poseNet = await ml5.poseNet(video, () => console.log('PoseNet 모델 완료!'));
         
         console.log("모든 모델 로드 완료!");
     } catch (error) {
         console.error("모델 로드 실패:", error);
         loadingMessage.innerText = "모델 로드에 실패했습니다. 새로고침 해주세요.";
     } finally {
-        loadingMessage.style.display = 'none'; // 로딩 메시지 숨김
+        // 모든 로드가 끝나면(성공하든 실패하든) 메시지 숨김
+        loadingMessage.style.display = 'none'; 
     }
 }
 
@@ -80,6 +81,8 @@ function startDetection() {
 
 // 3-1. 얼굴 감지 루프 (face-api)
 async function detectFaces() {
+    // [수정됨] 
+    // .box 속성을 바로 읽기 위해 랜드마크 없이 기본 감지만 사용
     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
     faceDetections = faceapi.resizeResults(detections, displaySize);
     
@@ -108,9 +111,10 @@ function detectPoses() {
 }
 
 // 4. 안내 문구 갱신 로직 (3초마다 실행)
+// [수정됨] - 시간 기반 기본 문구 추가
 function updateMessage() {
-    const possibleMessages = ["카메라가 당신을 보고 있습니다."]; // 기본 문구
-    
+    const specialMessages = []; // 특수 조건 메시지 배열
+
     // 현재 감지된 상태 확인
     const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
     const isRaisingHand = poses.length > 0 && checkArmRaised(poses[0].pose);
@@ -118,47 +122,61 @@ function updateMessage() {
 
     // 조건에 따라 메시지 추가
     if (isWearingHat) {
-        possibleMessages.push("모자를 쓴 민지");
+        specialMessages.push("멋진 모자를 쓰셨네요!");
     }
     if (isWearingSunglasses) {
-        possibleMessages.push("선글라스를 쓴 민지.");
+        specialMessages.push("선글라스가 잘 어울려요.");
     }
     if (isRaisingHand) {
-        possibleMessages.push("손을 번쩍 든 민지!");
-        possibleMessages.push("손을 들고 있는 민지");
+        specialMessages.push("손을 번쩍 드셨군요!");
+        specialMessages.push("좋아요! 포즈가 멋집니다.");
     }
     if (faceDetections.length > 1) {
-        possibleMessages.push("두 명의 민지");
+        specialMessages.push("두 분이 함께 있네요!");
     }
 
-    // possibleMessages 배열에서 무작위로 하나 선택
-    currentMessage = possibleMessages[Math.floor(Math.random() * possibleMessages.length)];
+    // [수정된 로직]
+    if (specialMessages.length > 0) {
+        // 1. 특별한 포즈/사물이 감지되면, 그 중 하나를 무작위로 선택
+        currentMessage = specialMessages[Math.floor(Math.random() * specialMessages.length)];
+    } else {
+        // 2. [새로운 기본값]
+        // 특별한 조건이 없을 때 (얼굴만 감지된 상태) 시간 기반 문구 생성
+        const time = getFormattedTime(); // 헬퍼 함수 호출
+        currentMessage = `${time}분의 민지`; 
+    }
 }
 
 // 5. 그리기 루프 (100ms마다 실행)
 function drawLoop() {
-    if (!canvas) return; // 캔버스가 준비되지 않았으면 종료
+    if (!canvas || loadingMessage.style.display === 'block') return; // 캔버스 없거나 로딩 중이면 종료
     
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (faceDetections.length > 0) {
-        // 첫 번째 사람의 얼굴을 기준으로 문구 표시
-        const box = faceDetections[0].box; // ✅ 수정된 코드
+        // [얼굴 감지됨]
         
-        ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; // 반투명 검은 배경
+        // [수정됨] (오류 해결)
+        // faceDetections[0].detection.box -> faceDetections[0].box
+        const box = faceDetections[0].box; 
+        
+        // 'currentMessage'는 updateMessage가 3초마다 갱신 (예: "멋진 모자!" 또는 "15:03분의 민지")
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; 
         ctx.fillRect(box.x - 10, box.y - 40, box.width + 20, 35);
-        
-        ctx.fillStyle = "#FFFF00"; // 노란색 텍스트
+        ctx.fillStyle = "#FFFF00"; 
         ctx.font = '22px Arial';
         ctx.textAlign = 'center';
         ctx.fillText(currentMessage, box.x + box.width / 2, box.y - 15);
-    } else if (loadingMessage.style.display === 'none') { // 로딩 중이 아닐 때만
-        // 감지된 얼굴이 없으면 중앙에 표시
+
+    } else { 
+        // [얼굴 감지 안됨]
+        // (로딩 중이 아닐 때만)
+        // 얼굴이 없으므로, 고정된 초기 메시지를 중앙에 표시
         ctx.fillStyle = "#FFFFFF";
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(currentMessage, canvas.width / 2, canvas.height / 2);
+        ctx.fillText("카메라를 바라보세요", canvas.width / 2, canvas.height / 2); 
     }
 }
 
@@ -167,26 +185,28 @@ function drawLoop() {
 // (헬퍼 1) 포즈 판별
 function checkArmRaised(pose) {
     if (!pose || !pose.keypoints) return false;
-    
     const minConfidence = 0.2; 
-    
     const leftWrist = pose.keypoints.find(k => k.part === 'leftWrist');
     const leftShoulder = pose.keypoints.find(k => k.part === 'leftShoulder');
     const rightWrist = pose.keypoints.find(k => k.part === 'rightWrist');
     const rightShoulder = pose.keypoints.find(k => k.part === 'rightShoulder');
-
-    if (leftWrist && leftShoulder && 
-        leftWrist.score > minConfidence && leftShoulder.score > minConfidence) {
+    if (leftWrist && leftShoulder && leftWrist.score > minConfidence && leftShoulder.score > minConfidence) {
         if (leftWrist.position.y < leftShoulder.position.y) return true;
     }
-    
-    if (rightWrist && rightShoulder && 
-        rightWrist.score > minConfidence && rightShoulder.score > minConfidence) {
+    if (rightWrist && rightShoulder && rightWrist.score > minConfidence && rightShoulder.score > minConfidence) {
         if (rightWrist.position.y < rightShoulder.position.y) return true;
     }
-    
     return false;
 }
+
+// (헬퍼 2) [새로 추가된 함수] - 현재 시간을 HH:MM 형식으로 반환
+function getFormattedTime() {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+}
+
 
 // --- 스크립트 실행 ---
 async function main() {
