@@ -5,8 +5,7 @@ let canvas;
 let displaySize;
 
 // --- [수정됨] ---
-// GitHub 저장소의 'models' 폴더를 참조
-const MODEL_URL = '/models'; 
+const MODEL_URL = './models'; // ✅ 올바른 경로
 // ---------------
 
 // 모델 인스턴스
