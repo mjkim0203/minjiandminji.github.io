@@ -30,7 +30,7 @@ async function loadModels() {
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
         console.log("얼굴 모델 완료!");
         
-        // 1-2. coco-ssd (사물: 모자) - 'cocossd' 오타 수정됨
+        // 1-2. coco-ssd (사물: 모자) - 'cocossd'
         objectDetector = await ml5.objectDetector('cocossd');
         console.log("사물 모델 완료!");
         
@@ -42,7 +42,6 @@ async function loadModels() {
         console.error("모델 로드 실패:", error);
         loadingMessage.innerText = "모델 로드에 실패했습니다. 새로고침 해주세요.";
     } finally {
-        // 모든 로드가 끝나면(성공하든 실패하든) 메시지 숨김
         loadingMessage.style.display = 'none'; 
     }
 }
@@ -76,92 +75,86 @@ function startDetection() {
     setInterval(drawLoop, 100); 
 
     // 안내 문구 갱신 루프 (3초마다)
-    messageTimer = setInterval(updateMessage, 3000);
+    messageTimer = setInterval(updateMessage, 3000); // 3초마다 문구 결정
 }
 
 // 3-1. 얼굴 감지 루프 (face-api)
 async function detectFaces() {
-    // [수정됨] 
-    // .box 속성을 바로 읽기 위해 랜드마크 없이 기본 감지만 사용
     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
     faceDetections = faceapi.resizeResults(detections, displaySize);
-    
-    requestAnimationFrame(detectFaces); // 부드러운 루프
+    requestAnimationFrame(detectFaces); 
 }
 
 // 3-2. 사물 감지 루프 (coco-ssd)
 function detectObjects() {
-    if (objectDetector) { // 모델이 로드되었는지 확인
+    if (objectDetector) { 
         objectDetector.detect(video, (err, results) => {
             if (err) console.error(err);
             objectDetections = results || [];
-            
-            detectObjects(); // 재귀 호출
+            detectObjects(); 
         });
     }
 }
 
 // 3-3. 포즈 감지 루프 (PoseNet)
 function detectPoses() {
-    if (poseNet) { // 모델이 로드되었는지 확인
+    if (poseNet) { 
         poseNet.on('pose', (results) => {
             poses = results;
         });
     }
 }
 
-// 4. 안내 문구 갱신 로직 (3초마다 실행)
-// [수정됨] - 시간 기반 기본 문구 추가
+// =======================================================
+// [⭐ 수정된 핵심 로직] 4. 안내 문구 갱신 (우선순위 적용)
+// =======================================================
 function updateMessage() {
-    const specialMessages = []; // 특수 조건 메시지 배열
-
-    // 현재 감지된 상태 확인
-    const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
+    // --- 1. 모든 조건 상태를 먼저 확인합니다 ---
     const isRaisingHand = poses.length > 0 && checkArmRaised(poses[0].pose);
+    const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
     const isWearingSunglasses = objectDetections.some(obj => obj.label === 'sunglasses');
+    const isMultiplePeople = faceDetections.length > 1; // (보너스 조건)
 
-    // 조건에 따라 메시지 추가
-    if (isWearingHat) {
-        specialMessages.push("모자를 쓴 민지");
-    }
-    if (isWearingSunglasses) {
-        specialMessages.push("선글라스를 쓴 민지");
-    }
+    // --- 2. 요청하신 우선순위(위계)에 따라 문구를 결정합니다 ---
+    
+    // 최우선 순위: 팔 들기 (Pose)
     if (isRaisingHand) {
-        specialMessages.push("손을 번쩍 든 민지");
-        specialMessages.push("팔을 들고 있는 민지");
+        currentMessage = "손을 번쩍 드셨군요!";
+    } 
+    // 2순위: 모자 (Object)
+    else if (isWearingHat) {
+        currentMessage = "멋진 모자를 쓰셨네요!";
+    } 
+    // 3순위: 선글라스 (Object)
+    else if (isWearingSunglasses) {
+        currentMessage = "선글라스가 잘 어울려요.";
+    } 
+    // 4순위: 여러 사람 (보너스)
+    else if (isMultiplePeople) {
+        currentMessage = "두 분이 함께 있네요!";
     }
-    if (faceDetections.length > 1) {
-        specialMessages.push("두 명의 민지");
-    }
-
-    // [수정된 로직]
-    if (specialMessages.length > 0) {
-        // 1. 특별한 포즈/사물이 감지되면, 그 중 하나를 무작위로 선택
-        currentMessage = specialMessages[Math.floor(Math.random() * specialMessages.length)];
-    } else {
-        // 2. [새로운 기본값]
-        // 특별한 조건이 없을 때 (얼굴만 감지된 상태) 시간 기반 문구 생성
+    // 5순위: 기본값 (Default)
+    else {
         const time = getFormattedTime(); // 헬퍼 함수 호출
         currentMessage = `${time}분의 민지`; 
     }
+    // 'if...else if...else' 구문을 사용했기 때문에
+    // 'isRaisingHand'가 true이면, 모자를 썼든 안 썼든 무조건 "손을 번쩍!" 메시지만 뜹니다.
 }
 
 // 5. 그리기 루프 (100ms마다 실행)
 function drawLoop() {
-    if (!canvas || loadingMessage.style.display === 'block') return; // 캔버스 없거나 로딩 중이면 종료
+    if (!canvas || loadingMessage.style.display === 'block') return; 
     
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (faceDetections.length > 0) {
         // [얼굴 감지됨]
-        
-        // [수정됨] (오류 해결)
-        // faceDetections[0].detection.box -> faceDetections[0].box
+        // 'box' 오류 수정된 상태
         const box = faceDetections[0].box; 
         
-        // 'currentMessage'는 updateMessage가 3초마다 갱신 (예: "멋진 모자!" 또는 "15:03분의 민지")
+        // 'currentMessage'는 updateMessage가 3초마다 갱신한 값을 사용
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; 
         ctx.fillRect(box.x - 10, box.y - 40, box.width + 20, 35);
         ctx.fillStyle = "#FFFF00"; 
@@ -171,8 +164,6 @@ function drawLoop() {
 
     } else { 
         // [얼굴 감지 안됨]
-        // (로딩 중이 아닐 때만)
-        // 얼굴이 없으므로, 고정된 초기 메시지를 중앙에 표시
         ctx.fillStyle = "#FFFFFF";
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
@@ -199,7 +190,7 @@ function checkArmRaised(pose) {
     return false;
 }
 
-// (헬퍼 2) [새로 추가된 함수] - 현재 시간을 HH:MM 형식으로 반환
+// (헬퍼 2) 현재 시간을 HH:MM 형식으로 반환
 function getFormattedTime() {
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
@@ -210,19 +201,17 @@ function getFormattedTime() {
 
 // --- 스크립트 실행 ---
 async function main() {
-    // 1. 비디오가 재생될 준비가 되면 모델 로드 및 감지 시작
     video.addEventListener('play', async () => {
         console.log("Video is playing. Starting model load...");
         
-        await loadModels(); // 모델 로드 (이 함수 안에 로딩 메시지 표시/숨김 로직 포함)
+        await loadModels(); 
         
-        if (loadingMessage.style.display === 'none') { // 모델 로드 성공 시에만
+        if (loadingMessage.style.display === 'none') { 
             startDetection();
             console.log("Detection started.");
         }
     });
     
-    // 2. 비디오 스트림 시작
     await startVideo(); 
 }
 
