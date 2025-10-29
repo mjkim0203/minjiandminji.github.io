@@ -144,7 +144,7 @@ function drawLoop() {
 
     if (faceDetections.length > 0) {
         // 첫 번째 사람의 얼굴을 기준으로 문구 표시
-        const box = faceDetections[0].detection.box;
+        const box = faceDetections[0].box; // ✅ 수정된 코드
         
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; // 반투명 검은 배경
         ctx.fillRect(box.x - 10, box.y - 40, box.width + 20, 35);
