@@ -32,7 +32,7 @@ async function loadModels() {
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
         
         // 1-2. coco-ssd (사물: 모자)
-        objectDetector = await ml5.objectDetector('cocosdd');
+        objectDetector = await ml5.objectDetector('cocossd');
         
         // 1-3. PoseNet (신체 포즈: 팔 들기)
         poseNet = await ml5.poseNet(video, () => console.log('PoseNet 모델 로드 완료!'));
