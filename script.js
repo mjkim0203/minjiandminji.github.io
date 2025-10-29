@@ -122,17 +122,17 @@ function updateMessage() {
 
     // 조건에 따라 메시지 추가
     if (isWearingHat) {
-        specialMessages.push("멋진 모자를 쓰셨네요!");
+        specialMessages.push("모자를 쓴 민지");
     }
     if (isWearingSunglasses) {
-        specialMessages.push("선글라스가 잘 어울려요.");
+        specialMessages.push("선글라스를 쓴 민지");
     }
     if (isRaisingHand) {
-        specialMessages.push("손을 번쩍 드셨군요!");
-        specialMessages.push("좋아요! 포즈가 멋집니다.");
+        specialMessages.push("손을 번쩍 든 민지");
+        specialMessages.push("팔을 들고 있는 민지");
     }
     if (faceDetections.length > 1) {
-        specialMessages.push("두 분이 함께 있네요!");
+        specialMessages.push("두 명의 민지");
     }
 
     // [수정된 로직]
