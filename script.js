@@ -20,7 +20,9 @@ let poses = [];
 let currentMessage = "카메라를 바라보세요"; // 초기 메시지
 let messageTimer;
 
-// 1. 모델 로드
+// =======================================================
+// [⭐ 1. 모델 로드 수정] - 표정/랜드마크 모델 추가
+// =======================================================
 async function loadModels() {
     console.log("모델 로딩 시작...");
     loadingMessage.style.display = 'block'; // 로딩 메시지 표시
@@ -28,7 +30,14 @@ async function loadModels() {
     try {
         // 1-1. face-api (얼굴 기준점)
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        console.log("얼굴 모델 완료!");
+        
+        // [새로 추가] 표정 인식을 위해 랜드마크 모델이 필요
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        
+        // [새로 추가] 표정 인식 모델
+        await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+        
+        console.log("얼굴/표정 모델 완료!");
         
         // 1-2. coco-ssd (사물: 모자) - 'cocossd'
         objectDetector = await ml5.objectDetector('cocossd');
@@ -78,9 +87,15 @@ function startDetection() {
     messageTimer = setInterval(updateMessage, 3000); // 3초마다 문구 결정
 }
 
-// 3-1. 얼굴 감지 루프 (face-api)
+// =======================================================
+// [⭐ 3-1. 얼굴 감지 루프 수정] - 표정 감지 (.withFaceExpressions)
+// =======================================================
 async function detectFaces() {
-    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+    // 표정을 감지하기 위해 .withFaceLandmarks()와 .withFaceExpressions() 추가
+    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                                .withFaceLandmarks()
+                                .withFaceExpressions();
+                                
     faceDetections = faceapi.resizeResults(detections, displaySize);
     requestAnimationFrame(detectFaces); 
 }
@@ -106,14 +121,14 @@ function detectPoses() {
 }
 
 // =======================================================
-// [⭐ 수정된 핵심 로직] 4. 안내 문구 갱신 (우선순위 적용)
+// [⭐ 4. 안내 문구 갱신 수정] - 표정 우선순위 로직 추가
 // =======================================================
 function updateMessage() {
     // --- 1. 모든 조건 상태를 먼저 확인합니다 ---
     const isRaisingHand = poses.length > 0 && checkArmRaised(poses[0].pose);
     const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
     const isWearingSunglasses = objectDetections.some(obj => obj.label === 'sunglasses');
-    const isMultiplePeople = faceDetections.length > 1; // (보너스 조건)
+    const isMultiplePeople = faceDetections.length > 1;
 
     // --- 2. 요청하신 우선순위(위계)에 따라 문구를 결정합니다 ---
     
@@ -133,16 +148,51 @@ function updateMessage() {
     else if (isMultiplePeople) {
         currentMessage = "두 분이 함께 있네요!";
     }
-    // 5순위: 기본값 (Default)
+    // 5순위: [수정됨] 표정 또는 기본값
     else {
-        const time = getFormattedTime(); // 헬퍼 함수 호출
-        currentMessage = `${time}분의 민지`; 
+        // 얼굴이 감지되었고, 표정 데이터가 있는지 확인
+        if (faceDetections.length > 0 && faceDetections[0].expressions) {
+            
+            // 가장 확률이 높은 표정을 찾음
+            const topExpression = getTopExpression(faceDetections[0].expressions);
+
+            // 표정에 따라 문구 결정
+            switch (topExpression) {
+                case 'happy':
+                    currentMessage = '웃고 있는 민지';
+                    break;
+                case 'sad':
+                    currentMessage = '슬픈 민지';
+                    break;
+                case 'angry':
+                    currentMessage = '화난 표정의 민지';
+                    break;
+                case 'disgusted':
+                    currentMessage = '불만스러운 민지';
+                    break;
+                case 'surprised':
+                    currentMessage = '놀란 표정의 민지';
+                    break;
+                case 'fearful':
+                    currentMessage = '두려워하고 있는 민지';
+                    break;
+                case 'neutral':
+                default:
+                    // 'neutral'이거나 (혹은 다른 예외상황일 때) 기본값
+                    const time = getFormattedTime();
+                    currentMessage = `${time}분의 민지`; 
+            }
+        } else {
+            // (혹시 모를 예외) 표정 데이터가 없으면 기본값
+            const time = getFormattedTime();
+            currentMessage = `${time}분의 민지`; 
+        }
     }
-    // 'if...else if...else' 구문을 사용했기 때문에
-    // 'isRaisingHand'가 true이면, 모자를 썼든 안 썼든 무조건 "손을 번쩍!" 메시지만 뜹니다.
 }
 
-// 5. 그리기 루프 (100ms마다 실행)
+// =======================================================
+// [⭐ 5. 그리기 루프 수정] - box 경로 복구
+// =======================================================
 function drawLoop() {
     if (!canvas || loadingMessage.style.display === 'block') return; 
     
@@ -151,10 +201,10 @@ function drawLoop() {
 
     if (faceDetections.length > 0) {
         // [얼굴 감지됨]
-        // 'box' 오류 수정된 상태
-        const box = faceDetections[0].box; 
+        // [수정됨] .withFaceLandmarks()를 사용하면 데이터 구조가 바뀝니다.
+        // faceDetections[0].box -> faceDetections[0].detection.box
+        const box = faceDetections[0].detection.box; 
         
-        // 'currentMessage'는 updateMessage가 3초마다 갱신한 값을 사용
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; 
         ctx.fillRect(box.x - 10, box.y - 40, box.width + 20, 35);
         ctx.fillStyle = "#FFFF00"; 
@@ -196,6 +246,13 @@ function getFormattedTime() {
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
+}
+
+// [새로 추가] (헬퍼 3) 가장 확률이 높은 표정 찾기
+function getTopExpression(expressions) {
+    // expressions 객체 (예: {happy: 0.9, sad: 0.01, ...})에서
+    // 가장 값이 높은 키(key)를 반환합니다.
+    return Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
 }
 
 
