@@ -110,7 +110,7 @@ function detectPoses() {
 
 // 4. 안내 문구 갱신 로직 (3초마다 실행)
 function updateMessage() {
-    const possibleMessages = ["AI가 당신을 보고 있습니다."]; // 기본 문구
+    const possibleMessages = ["카메라가 당신을 보고 있습니다."]; // 기본 문구
     
     // 현재 감지된 상태 확인
     const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
@@ -119,17 +119,17 @@ function updateMessage() {
 
     // 조건에 따라 메시지 추가
     if (isWearingHat) {
-        possibleMessages.push("멋진 모자를 쓰셨네요!");
+        possibleMessages.push("모자를 쓴 민지");
     }
     if (isWearingSunglasses) {
-        possibleMessages.push("선글라스가 잘 어울려요.");
+        possibleMessages.push("선글라스를 쓴 민지.");
     }
     if (isRaisingHand) {
-        possibleMessages.push("손을 번쩍 드셨군요!");
-        possibleMessages.push("좋아요! 포즈가 멋집니다.");
+        possibleMessages.push("손을 번쩍 든 민지!");
+        possibleMessages.push("손을 들고 있는 민지");
     }
     if (faceDetections.length > 1) {
-        possibleMessages.push("두 분이 함께 있네요!");
+        possibleMessages.push("두 명의 민지");
     }
 
     // possibleMessages 배열에서 무작위로 하나 선택
