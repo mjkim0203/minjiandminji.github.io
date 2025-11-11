@@ -61,8 +61,15 @@
         });
         
         // 2. 표정 분류기(Emotion Classifier) 초기화
-        const emotionClassifier = new emotionClassifier();
-        emotionClassifier.init(emotionModel); // 위에서 로드한 'emotionmodel.js'의 데이터
+        const emotionClassifier = new emotionClassifier(); // ❌ 문제의 줄
+        emotionClassifier.init(emotionModel); 
+// ... (중략) ...
+        function drawLoop() {
+// ... (중략) ...
+                // --- 표정 감지 ---
+                const emotionData = emotionClassifier.getEmotion(ctracker.getCurrentParameters()); // ❌ 이 줄도 수정 필요
+// ... (중략) ...
+        }
 
         // 3. 웹캠 시작
         navigator.mediaDevices.getUserMedia({ video: true })
