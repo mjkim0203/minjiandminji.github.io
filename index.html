@@ -2,48 +2,149 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Interactive Guide (GitHub)</title>
+    <title>구형 iMac 테스트 (clmtrackr)</title>
     <style>
         body {
-            margin: 0; padding: 0;
-            display: flex; justify-content: center; align-items: center;
-            height: 100vh; background-color: #2c2c2c;
-            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #333;
+            margin: 0;
             font-family: Arial, sans-serif;
         }
-        #videoContainer {
+        #container {
             position: relative;
             border: 2px solid white;
-            background-color: #000;
         }
-        canvas {
+        /* 캔버스와 비디오를 겹침 */
+        video, canvas {
             position: absolute;
             top: 0;
             left: 0;
         }
-        #loadingMessage {
+        #message {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 24px;
+            top: 10px;
+            left: 10px;
             background-color: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-            display: none; /* JS에서 표시/숨김 */
+            color: #FFFF00;
+            font-size: 24px;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
-    <div id="videoContainer">
-        <video id="video" width="720" height="560" autoplay muted playsinline></video>
-        <div id="loadingMessage">로드 중입니다...</div>
+    
+    <div id="container">
+        <video id="video" width="640" height="480" autoplay muted playsinline></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
+        <div id="message">얼굴을 찾는 중...</div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/clmtrackr@1.1.2/build/clmtrackr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/clmtrackr@1.1.2/models/model_pca_20_svm.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/auduno/clmtrackr/examples/js/emotion_classifier.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/auduno/clmtrackr/examples/js/emotionmodel.js"></script>
 
-    <script src="script.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const messageEl = document.getElementById('message');
+
+        // 1. 얼굴 추적기(Tracker) 초기화
+        const ctracker = new clmtrackr.tracker({
+            model: pModel // 위에서 로드한 'model_pca_20_svm.js'의 모델
+        });
+        
+        // 2. 표정 분류기(Emotion Classifier) 초기화
+        const emotionClassifier = new emotionClassifier();
+        emotionClassifier.init(emotionModel); // 위에서 로드한 'emotionmodel.js'의 데이터
+
+        // 3. 웹캠 시작
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                video.srcObject = stream;
+                video.play();
+                // 비디오가 재생되면 추적 시작
+                video.addEventListener('playing', startTracking);
+            })
+            .catch(function(err) {
+                console.error("웹캠 오류:", err);
+                messageEl.innerText = "웹캠을 찾을 수 없습니다.";
+            });
+
+        function startTracking() {
+            // clmtrackr 시작
+            ctracker.init(pModel);
+            ctracker.start(video);
+            
+            // 그리기 루프 시작
+            drawLoop();
+        }
+
+        function drawLoop() {
+            // 계속해서 다음 프레임 요청 (이것이 구형 방식)
+            requestAnimationFrame(drawLoop);
+
+            // 캔버스 초기화
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 현재 얼굴 추적 위치 가져오기
+            const positions = ctracker.getCurrentPosition();
+
+            if (positions) {
+                // (옵션) 얼굴에 랜드마크 그리기
+                ctracker.draw(canvas);
+
+                // --- 표정 감지 ---
+                const emotionData = emotionClassifier.getEmotion(ctracker.getCurrentParameters());
+                
+                if (emotionData && emotionData.emotion) {
+                    // 가장 확률이 높은 표정 찾기
+                    let topEmotion = "";
+                    let maxScore = 0;
+                    for (let i = 0; i < emotionData.emotions.length; i++) {
+                        if (emotionData.emotions[i].value > maxScore) {
+                            maxScore = emotionData.emotions[i].value;
+                            topEmotion = emotionData.emotions[i].emotion;
+                        }
+                    }
+
+                    // 문구 업데이트
+                    updateMessage(topEmotion);
+                } else {
+                    messageEl.innerText = "얼굴 추적 중...";
+                }
+
+            } else {
+                // 얼굴을 못 찾았을 때
+                messageEl.innerText = "얼굴을 찾는 중... (천천히 움직여주세요)";
+            }
+        }
+        
+        function updateMessage(emotion) {
+            switch (emotion) {
+                case 'happy':
+                    messageEl.innerText = '즐거워 보이네요!';
+                    break;
+                case 'sad':
+                    messageEl.innerText = '슬퍼 보입니다.';
+                    break;
+                case 'angry':
+                    messageEl.innerText = '화가 났나요?';
+                    break;
+                case 'surprised':
+                    messageEl.innerText = '놀란 표정이네요!';
+                    break;
+                default:
+                    messageEl.innerText = '표정을 읽는 중...';
+            }
+        }
+
+    </script>
 </body>
 </html>
