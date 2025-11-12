@@ -60,16 +60,15 @@
             model: pModel // 위에서 로드한 'model_pca_20_svm.js'의 모델
         });
         
+        // =======================================================
+        // [⭐ 수정된 부분]
+        // 변수 이름 'emotionClassifier'가 라이브러리의 클래스 이름과 겹쳐서
+        // 'myClassifier'라는 다른 이름으로 변경했습니다.
+        // =======================================================
+        
         // 2. 표정 분류기(Emotion Classifier) 초기화
-        const emotionClassifier = new emotionClassifier(); // ❌ 문제의 줄
-        emotionClassifier.init(emotionModel); 
-// ... (중략) ...
-        function drawLoop() {
-// ... (중략) ...
-                // --- 표정 감지 ---
-                const emotionData = emotionClassifier.getEmotion(ctracker.getCurrentParameters()); // ❌ 이 줄도 수정 필요
-// ... (중략) ...
-        }
+        const myClassifier = new emotionClassifier(); // ✅ 수정됨
+        myClassifier.init(emotionModel); // ✅ 수정됨
 
         // 3. 웹캠 시작
         navigator.mediaDevices.getUserMedia({ video: true })
@@ -94,7 +93,7 @@
         }
 
         function drawLoop() {
-            // 계속해서 다음 프레임 요청 (이것이 구형 방식)
+            // 계속해서 다음 프레임 요청
             requestAnimationFrame(drawLoop);
 
             // 캔버스 초기화
@@ -108,7 +107,8 @@
                 ctracker.draw(canvas);
 
                 // --- 표정 감지 ---
-                const emotionData = emotionClassifier.getEmotion(ctracker.getCurrentParameters());
+                // [⭐ 수정됨] 'myClassifier' 변수 사용
+                const emotionData = myClassifier.getEmotion(ctracker.getCurrentParameters()); // ✅ 수정됨
                 
                 if (emotionData && emotionData.emotion) {
                     // 가장 확률이 높은 표정 찾기
