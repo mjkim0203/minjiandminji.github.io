@@ -46,12 +46,13 @@ async function loadModels() {
 // =======================================================
 function startVideo() {
     console.log("웹캠 시작 시도...");
+    // 구형 브라우저 호환성을 위해 .then() 사용
     navigator.mediaDevices.getUserMedia({ video: {} })
-        .then(stream => {
+        .then(function(stream) {
             console.log("웹캠 스트림 확보 성공.");
             video.srcObject = stream;
         })
-        .catch(err => {
+        .catch(function(err) {
             console.error("웹캠 접근 오류:", err);
             loadingMessage.style.display = 'block';
             loadingMessage.innerText = "웹캠 권한을 허용해주세요.";
@@ -154,7 +155,7 @@ function updateMessage() {
 
 // 5. 그리기 루프 (100ms마다 실행)
 function drawLoop() {
-    if (!ctx || loadingMessage.style.display === 'block') return; 
+    if (!ctx || (loadingMessage && loadingMessage.style.display === 'block')) return; // 로딩 메시지 확인
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -211,13 +212,14 @@ function getTopExpression(expressions) {
 // =======================================================
 function main() {
     // 1. 비디오가 재생되면 모델 로드 및 감지 시작
-    video.addEventListener('play', () => {
+    video.addEventListener('play', function() {
         console.log("Video is playing. Starting model load...");
         
         // async 함수인 loadModels()를 호출하고 .then()으로 후속 처리
-        loadModels().then(() => {
+        loadModels().then(function() {
             // loadModels가 성공적으로 완료된 후 (finally가 실행된 후)
-            if (loadingMessage.style.display === 'none') { // (모델 로드 성공 시)
+            // (구형 브라우저 호환성을 위해 loadingMessage가 null인지 한번 더 체크)
+            if (!loadingMessage || loadingMessage.style.display === 'none') { 
                 startDetection();
                 console.log("Detection started.");
             }
