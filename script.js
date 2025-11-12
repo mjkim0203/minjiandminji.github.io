@@ -12,18 +12,14 @@ let faceDetections = [];
 let currentMessage = "카메라를 바라보세요";
 let messageTimer;
 
-// =======================================================
-// [⭐ 1. 모델 로드 수정] - 'tinyFaceDetector' 대신 'ssdMobilenetv1'
-// =======================================================
+// 1. 모델 로드 (SSD Mobilenetv1)
 async function loadModels() {
     console.log("모델 로딩 시작...");
     loadingMessage.style.display = 'block'; 
 
     try {
-        // [수정됨] 더 정확한 모델로 변경
         await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
         console.log("얼굴 탐지 모델(SSD) 완료!");
-        
         console.log("모든 모델 로드 완료!");
     } catch (error) {
         console.error("모델 로드 실패:", error);
@@ -48,7 +44,9 @@ function startVideo() {
         });
 }
 
-// 3. 실시간 감지 시작 (메인 함수)
+// =======================================================
+// [⭐ 3. 실시간 감지 시작 수정] - 감지 속도 조절
+// =======================================================
 function startDetection() {
     canvas = faceapi.createCanvasFromMedia(video);
     videoContainer.append(canvas);
@@ -56,24 +54,36 @@ function startDetection() {
     faceapi.matchDimensions(canvas, displaySize);
     ctx = canvas.getContext('2d', { willReadFrequently: true }); 
 
-    detectFaces();    
+    // [수정됨] 
+    // detectFaces()를 매 프레임(rAF)마다 실행하는 대신,
+    // 200ms(0.2초)에 한 번씩만 실행하여 부하를 줄입니다.
+    setInterval(detectFaces, 200); // 1초에 5번 감지
+
+    // 그리기는 0.1초에 한 번씩 실행 (부드러움을 위해)
     setInterval(drawLoop, 100); 
+
     messageTimer = setInterval(updateMessage, 3000); 
 }
 
 // =======================================================
-// [⭐ 3-1. 감지 루프 수정] - 'SsdMobilenetv1Options' 사용
+// [⭐ 3-1. 감지 루프 수정] - 재귀 호출(rAF) 제거
 // =======================================================
 async function detectFaces() {
-    // [수정됨] SsdMobilenetv1Options 사용
+    // 비디오가 준비되지 않았으면 감지 건너뛰기 (성능 향상)
+    if (video.readyState < 3) { 
+        return; 
+    }
+
     const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options());
     
-    // 콘솔 로그 유지 (0이 아닌 1이 뜨는지 확인)
     console.log('얼굴 감지 루프 실행 중... 찾은 얼굴:', detections.length);
                                 
     faceDetections = faceapi.resizeResults(detections, displaySize);
-    requestAnimationFrame(detectFaces); 
+
+    // [수정됨] requestAnimationFrame(detectFaces); 재귀 호출 제거
+    // (setInterval이 이 함수를 200ms마다 호출해 줌)
 }
+
 
 // 4. 안내 문구 갱신 (시간 갱신용)
 function updateMessage() {
@@ -81,16 +91,15 @@ function updateMessage() {
     currentMessage = `${time}분의 민지`; 
 }
 
-
-// 5. 그리기 루프 (100ms마다 실행)
+// 5. 그리기 루프 (오류 수정됨)
 function drawLoop() {
     if (!ctx || (loadingMessage && loadingMessage.style.display === 'block')) return; 
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (faceDetections.length > 0) {
-        // [수정됨] .withFaceLandmarks()를 안 썼으므로 .detection이 빠져야 합니다.
-        const box = faceDetections[0].box; // ✅ 수정된 코드
+        // [수정됨] .detection 제거
+        const box = faceDetections[0].box; 
         
         // 메인 메시지 그리기
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; 
