@@ -3,32 +3,31 @@ const videoContainer = document.getElementById('videoContainer');
 const loadingMessage = document.getElementById('loadingMessage');
 let canvas;
 let displaySize;
-let ctx; // 캔버스 context를 전역으로 선언
+let ctx; 
 
 const MODEL_URL = './models'; 
 
-// [수정됨] faceDetections 배열 하나만 남김
 let faceDetections = [];
 
-let currentMessage = "카메라를 바라보세요"; // 이 메시지가 바뀌면 성공
+let currentMessage = "카메라를 바라보세요";
 let messageTimer;
 
-// 1. 모델 로드 [수정됨] - 'tinyFaceDetector' 단 하나만 로드
+// =======================================================
+// [⭐ 1. 모델 로드 수정] - 'tinyFaceDetector' 대신 'ssdMobilenetv1'
+// =======================================================
 async function loadModels() {
     console.log("모델 로딩 시작...");
     loadingMessage.style.display = 'block'; 
 
     try {
-        // [수정됨] 랜드마크, 표정 모델 로드 제거
-        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-        console.log("얼굴 탐지 모델 완료!");
-        
-        // [수정됨] 사물, 포즈 모델 로드 제거
+        // [수정됨] 더 정확한 모델로 변경
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+        console.log("얼굴 탐지 모델(SSD) 완료!");
         
         console.log("모든 모델 로드 완료!");
     } catch (error) {
         console.error("모델 로드 실패:", error);
-        loadingMessage.innerText = "모델 로드에 실패했습니다. 새로고침 해주세요.";
+        loadingMessage.innerText = "모델 로드에 실패했습니다. (ssd_mobilenetv1 파일 확인)";
     } finally {
         loadingMessage.style.display = 'none'; 
     }
@@ -49,7 +48,7 @@ function startVideo() {
         });
 }
 
-// 3. 실시간 감지 시작 (메인 함수) [수정됨]
+// 3. 실시간 감지 시작 (메인 함수)
 function startDetection() {
     canvas = faceapi.createCanvasFromMedia(video);
     videoContainer.append(canvas);
@@ -57,50 +56,43 @@ function startDetection() {
     faceapi.matchDimensions(canvas, displaySize);
     ctx = canvas.getContext('2d', { willReadFrequently: true }); 
 
-    // 감지 루프 실행 (detectFaces만 실행)
     detectFaces();    
-    
-    // 그리기 및 갱신 루프
     setInterval(drawLoop, 100); 
-    
-    // [수정됨] updateMessage는 3초마다 시간 갱신용으로만 사용
     messageTimer = setInterval(updateMessage, 3000); 
 }
 
-// 3-1. 얼굴/표정 감지 루프 [수정됨]
+// =======================================================
+// [⭐ 3-1. 감지 루프 수정] - 'SsdMobilenetv1Options' 사용
+// =======================================================
 async function detectFaces() {
-    // [수정됨] 표정, 랜드마크 기능(.with...) 완전 제거
-    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+    // [수정됨] SsdMobilenetv1Options 사용
+    const detections = await faceapi.detectAllFaces(video, new faceapi.SsdMobilenetv1Options());
     
-    // [⭐ 중요] 콘솔에 이 로그가 0이 아닌 1이 찍히는지 확인하세요!
+    // 콘솔 로그 유지 (0이 아닌 1이 뜨는지 확인)
     console.log('얼굴 감지 루프 실행 중... 찾은 얼굴:', detections.length);
                                 
     faceDetections = faceapi.resizeResults(detections, displaySize);
     requestAnimationFrame(detectFaces); 
 }
 
-// 4. 안내 문구 갱신 (우선순위 로직) [수정됨]
+// 4. 안내 문구 갱신 (시간 갱신용)
 function updateMessage() {
-    // [수정됨] 이 함수의 유일한 역할은 '현재 시간' 문구를 갱신하는 것
     const time = getFormattedTime();
     currentMessage = `${time}분의 민지`; 
 }
 
 
-// 5. 그리기 루프 (100ms마다 실행) [수정됨]
+// 5. 그리기 루프 (100ms마다 실행)
 function drawLoop() {
     if (!ctx || (loadingMessage && loadingMessage.style.display === 'block')) return; 
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // [수정됨] 얼굴이 감지되면 -> (시간)의 민지 표시
-    // 감지 안되면 -> "카메라를..." 표시
     if (faceDetections.length > 0) {
+        // [수정됨] SsdMobilenetv1의 결과 경로는 .detection이 포함됩니다.
+        const box = faceDetections[0].detection.box; 
         
-        // [수정됨] 표정 감지를 안 하므로, box 경로는 .detection이 빠짐
-        const box = faceDetections[0].box; 
-        
-        // 메인 메시지 그리기 (updateMessage가 갱신한 시간)
+        // 메인 메시지 그리기
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; 
         ctx.fillRect(box.x - 10, box.y - 40, box.width + 20, 35);
         ctx.fillStyle = "#FFFF00"; 
@@ -118,8 +110,6 @@ function drawLoop() {
 }
 
 // --- 헬퍼 함수 (Helper Functions) ---
-
-// [수정됨] checkArmRaised, getTopExpression 함수 제거
 
 function getFormattedTime() {
     const now = new Date();
