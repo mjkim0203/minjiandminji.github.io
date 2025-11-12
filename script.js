@@ -17,7 +17,7 @@ let poses = [];
 let currentMessage = "카메라를 바라보세요";
 let messageTimer;
 
-// 1. 모델 로드 (내부는 async/await 유지)
+// 1. 모델 로드
 async function loadModels() {
     console.log("모델 로딩 시작...");
     loadingMessage.style.display = 'block'; 
@@ -62,16 +62,10 @@ function startDetection() {
     videoContainer.append(canvas);
     displaySize = { width: video.width, height: video.height };
     faceapi.matchDimensions(canvas, displaySize);
-
-    // 경고 해결: willReadFrequently 옵션 추가
     ctx = canvas.getContext('2d', { willReadFrequently: true }); 
-
-    // 감지 루프 실행
     detectFaces();    
     detectObjects();  
     detectPoses();    
-    
-    // 그리기 및 갱신 루프
     setInterval(drawLoop, 100); 
     messageTimer = setInterval(updateMessage, 3000); 
 }
@@ -81,7 +75,6 @@ async function detectFaces() {
     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
                                 .withFaceLandmarks()
                                 .withFaceExpressions();
-                                
     faceDetections = faceapi.resizeResults(detections, displaySize);
     requestAnimationFrame(detectFaces); 
 }
@@ -107,7 +100,6 @@ function detectPoses() {
 }
 
 // 4. 안내 문구 갱신 (우선순위 로직)
-// (이 함수는 '방법 1'과 동일하지만, 수정된 getTopExpression의 결과에 의존)
 function updateMessage() {
     const isRaisingHand = poses.length > 0 && checkArmRaised(poses[0].pose);
     const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
@@ -116,6 +108,7 @@ function updateMessage() {
     let topExpression = 'neutral';
     if (faceDetections.length > 0 && faceDetections[0].expressions) {
         // [⭐ 수정된 getTopExpression 함수를 호출]
+        // (Neutral을 제외한 1등을 무조건 반환)
         topExpression = getTopExpression(faceDetections[0].expressions);
     }
 
@@ -152,8 +145,9 @@ function updateMessage() {
     }
 }
 
-
-// 5. 그리기 루프 (100ms마다 실행)
+// =======================================================
+// [⭐ 5. 그리기 루프 수정] - 디버그 텍스트 추가
+// =======================================================
 function drawLoop() {
     if (!ctx || (loadingMessage && loadingMessage.style.display === 'block')) return; 
     
@@ -162,6 +156,7 @@ function drawLoop() {
     if (faceDetections.length > 0) {
         const box = faceDetections[0].detection.box; 
         
+        // 1. 메인 메시지 그리기 (3초마다 갱신)
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; 
         ctx.fillRect(box.x - 10, box.y - 40, box.width + 20, 35);
         ctx.fillStyle = "#FFFF00"; 
@@ -169,7 +164,25 @@ function drawLoop() {
         ctx.textAlign = 'center';
         ctx.fillText(currentMessage, box.x + box.width / 2, box.y - 15);
 
+        // 2. [⭐ 디버그 텍스트 추가]
+        // 현재 AI가 보는 가장 높은 표정(neutral 포함)을 실시간으로 표시
+        if (faceDetections[0].expressions) {
+            const expressions = faceDetections[0].expressions;
+            // neutral 포함 1등 찾기 (원본 로직)
+            const rawTopEmotion = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+            const rawTopProb = expressions[rawTopEmotion].toFixed(2); // 소수점 2자리
+
+            const debugText = `[AI가 보는 표정: ${rawTopEmotion} (${rawTopProb})]`;
+            
+            ctx.fillStyle = "#FFFFFF"; // 흰색
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            // 메인 메시지 박스 아래에 표시
+            ctx.fillText(debugText, box.x + box.width / 2, box.y + box.height + 20); 
+        }
+
     } else { 
+        // [얼굴 감지 안됨]
         ctx.fillStyle = "#FFFFFF";
         ctx.font = '24px Arial';
         ctx.textAlign = 'center';
@@ -203,7 +216,7 @@ function getFormattedTime() {
 }
 
 // =======================================================
-// [⭐ 수정된 핵심 로직] (헬퍼 3) - 방법 2: Neutral 무시
+// [⭐ 수정된 헬퍼 3] - Neutral 무시, 최소 점수(0.1) 기준 제거
 // =======================================================
 function getTopExpression(expressions) {
     
@@ -224,11 +237,10 @@ function getTopExpression(expressions) {
         }
     }
     
-    // 4. [중요]
-    // 1등을 한 감정 점수가 0.1 (10%)도 안된다면,
-    // (즉, 정말로 무표정일 때) 'neutral'을 반환합니다.
-    if (maxProb < 0.1) { // 10% 미만은 무시
-        return 'neutral';
+    // 4. [수정됨] 최소 점수 기준(0.1)을 제거합니다.
+    // 0.01%라도 1등이면 1등으로 반환합니다.
+    if (maxProb === 0.0) {
+        return 'neutral'; // 6개 감정 점수가 모두 0일 때만 neutral
     }
 
     return topEmotion;
