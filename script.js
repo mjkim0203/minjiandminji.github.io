@@ -41,12 +41,9 @@ async function loadModels() {
     }
 }
 
-// =======================================================
-// [⭐ 2. 웹캠 시작 수정] - async/await 대신 .then() 사용
-// =======================================================
+// 2. 웹캠 시작 (구형 브라우저 호환 .then() 사용)
 function startVideo() {
     console.log("웹캠 시작 시도...");
-    // 구형 브라우저 호환성을 위해 .then() 사용
     navigator.mediaDevices.getUserMedia({ video: {} })
         .then(function(stream) {
             console.log("웹캠 스트림 확보 성공.");
@@ -109,29 +106,50 @@ function detectPoses() {
     }
 }
 
-// 4. 안내 문구 갱신 (우선순위 로직)
+// =======================================================
+// [⭐ 수정된 핵심 로직] 4. 안내 문구 갱신 (방법 1: 기준점 적용)
+// =======================================================
 function updateMessage() {
+    // --- 1. 모든 조건 상태를 먼저 확인합니다 ---
     const isRaisingHand = poses.length > 0 && checkArmRaised(poses[0].pose);
     const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
     const isWearingSunglasses = objectDetections.some(obj => obj.label === 'sunglasses');
 
     let topExpression = 'neutral';
+    let expressions = null; // 표정 객체를 저장할 변수
+
     if (faceDetections.length > 0 && faceDetections[0].expressions) {
-        topExpression = getTopExpression(faceDetections[0].expressions);
+        expressions = faceDetections[0].expressions; // 7가지 확률 모두 저장
+        topExpression = getTopExpression(expressions);
     }
 
+    // --- 2. 요청하신 우선순위(위계)에 따라 문구를 결정합니다 ---
+    
+    // 1순위: 팔 들기 (Pose)
     if (isRaisingHand) {
         currentMessage = "손을 번쩍 드셨군요!";
     } 
+    // 2순위: 모자 (Object)
     else if (isWearingHat) {
         currentMessage = "멋진 모자를 쓰셨네요!";
     } 
+    // 3순위: 선글라스 (Object)
     else if (isWearingSunglasses) {
         currentMessage = "선글라스가 잘 어울려요.";
     }
-    else if (topExpression === 'happy') {
+    
+    // [⭐ 수정된 부분]
+    // 4순위: 'Happy' 표정이 50% 이상이면 (neutral보다 낮아도) 인정
+    // (expressions가 null이 아닌지 확인)
+    else if (expressions && expressions.happy > 0.5) { // 0.5 = 50%
         currentMessage = '웃고 있는 민지';
     }
+    // 5순위: 'Surprised' 표정이 70% 이상이면 인정
+    else if (expressions && expressions.surprised > 0.7) { // 0.7 = 70%
+        currentMessage = '놀란 표정의 민지';
+    }
+    
+    // 6순위: (나머지 표정들 - 1등을 찾은 결과(topExpression) 기준)
     else if (topExpression === 'sad') {
         currentMessage = '슬픈 민지';
     }
@@ -141,21 +159,21 @@ function updateMessage() {
     else if (topExpression === 'disgusted') {
         currentMessage = '불만스러운 민지';
     }
-    else if (topExpression === 'surprised') {
-        currentMessage = '놀란 표정의 민지';
-    }
     else if (topExpression === 'fearful') {
         currentMessage = '두려워하고 있는 민지';
     }
+    
+    // 7순위: 기본값 (neutral 표정 또는 그 외 모든 경우)
     else { 
         const time = getFormattedTime();
         currentMessage = `${time}분의 민지`; 
     }
 }
 
+
 // 5. 그리기 루프 (100ms마다 실행)
 function drawLoop() {
-    if (!ctx || (loadingMessage && loadingMessage.style.display === 'block')) return; // 로딩 메시지 확인
+    if (!ctx || (loadingMessage && loadingMessage.style.display === 'block')) return; 
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -197,28 +215,25 @@ function checkArmRaised(pose) {
 
 function getFormattedTime() {
     const now = new Date();
+    // (한국 시간 기준 - KST는 UTC+9)
+    // 브라우저의 로컬 시간 기준으로 작동하므로 별도 시간대 설정은 필요 없습니다.
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
 }
 
+// (헬퍼 3) 가장 확률이 높은 표정 찾기 (원본 로직)
 function getTopExpression(expressions) {
     return Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
 }
 
 
-// =======================================================
-// [⭐ 스크립트 실행 수정] - async/await 대신 .then() 사용
-// =======================================================
+// --- 스크립트 실행 (구형 호환) ---
 function main() {
-    // 1. 비디오가 재생되면 모델 로드 및 감지 시작
     video.addEventListener('play', function() {
         console.log("Video is playing. Starting model load...");
         
-        // async 함수인 loadModels()를 호출하고 .then()으로 후속 처리
         loadModels().then(function() {
-            // loadModels가 성공적으로 완료된 후 (finally가 실행된 후)
-            // (구형 브라우저 호환성을 위해 loadingMessage가 null인지 한번 더 체크)
             if (!loadingMessage || loadingMessage.style.display === 'none') { 
                 startDetection();
                 console.log("Detection started.");
@@ -226,9 +241,7 @@ function main() {
         });
     });
     
-    // 2. 비디오 스트림 시작 (async/await 없이)
     startVideo(); 
 }
 
-// --- 스크립트 실행 ---
 main();
