@@ -89,8 +89,8 @@ function drawLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (faceDetections.length > 0) {
-        // [수정됨] SsdMobilenetv1의 결과 경로는 .detection이 포함됩니다.
-        const box = faceDetections[0].detection.box; 
+        // [수정됨] .withFaceLandmarks()를 안 썼으므로 .detection이 빠져야 합니다.
+        const box = faceDetections[0].box; // ✅ 수정된 코드
         
         // 메인 메시지 그리기
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)"; 
