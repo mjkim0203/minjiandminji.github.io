@@ -106,50 +106,31 @@ function detectPoses() {
     }
 }
 
-// =======================================================
-// [⭐ 수정된 핵심 로직] 4. 안내 문구 갱신 (방법 1: 기준점 적용)
-// =======================================================
+// 4. 안내 문구 갱신 (우선순위 로직)
+// (이 함수는 '방법 1'과 동일하지만, 수정된 getTopExpression의 결과에 의존)
 function updateMessage() {
-    // --- 1. 모든 조건 상태를 먼저 확인합니다 ---
     const isRaisingHand = poses.length > 0 && checkArmRaised(poses[0].pose);
     const isWearingHat = objectDetections.some(obj => obj.label === 'hat');
     const isWearingSunglasses = objectDetections.some(obj => obj.label === 'sunglasses');
 
     let topExpression = 'neutral';
-    let expressions = null; // 표정 객체를 저장할 변수
-
     if (faceDetections.length > 0 && faceDetections[0].expressions) {
-        expressions = faceDetections[0].expressions; // 7가지 확률 모두 저장
-        topExpression = getTopExpression(expressions);
+        // [⭐ 수정된 getTopExpression 함수를 호출]
+        topExpression = getTopExpression(faceDetections[0].expressions);
     }
 
-    // --- 2. 요청하신 우선순위(위계)에 따라 문구를 결정합니다 ---
-    
-    // 1순위: 팔 들기 (Pose)
     if (isRaisingHand) {
         currentMessage = "손을 번쩍 드셨군요!";
     } 
-    // 2순위: 모자 (Object)
     else if (isWearingHat) {
         currentMessage = "멋진 모자를 쓰셨네요!";
     } 
-    // 3순위: 선글라스 (Object)
     else if (isWearingSunglasses) {
         currentMessage = "선글라스가 잘 어울려요.";
     }
-    
-    // [⭐ 수정된 부분]
-    // 4순위: 'Happy' 표정이 50% 이상이면 (neutral보다 낮아도) 인정
-    // (expressions가 null이 아닌지 확인)
-    else if (expressions && expressions.happy > 0.5) { // 0.5 = 50%
+    else if (topExpression === 'happy') {
         currentMessage = '웃고 있는 민지';
     }
-    // 5순위: 'Surprised' 표정이 70% 이상이면 인정
-    else if (expressions && expressions.surprised > 0.7) { // 0.7 = 70%
-        currentMessage = '놀란 표정의 민지';
-    }
-    
-    // 6순위: (나머지 표정들 - 1등을 찾은 결과(topExpression) 기준)
     else if (topExpression === 'sad') {
         currentMessage = '슬픈 민지';
     }
@@ -159,12 +140,13 @@ function updateMessage() {
     else if (topExpression === 'disgusted') {
         currentMessage = '불만스러운 민지';
     }
+    else if (topExpression === 'surprised') {
+        currentMessage = '놀란 표정의 민지';
+    }
     else if (topExpression === 'fearful') {
         currentMessage = '두려워하고 있는 민지';
     }
-    
-    // 7순위: 기본값 (neutral 표정 또는 그 외 모든 경우)
-    else { 
+    else { // 'neutral' (기본값)
         const time = getFormattedTime();
         currentMessage = `${time}분의 민지`; 
     }
@@ -215,16 +197,41 @@ function checkArmRaised(pose) {
 
 function getFormattedTime() {
     const now = new Date();
-    // (한국 시간 기준 - KST는 UTC+9)
-    // 브라우저의 로컬 시간 기준으로 작동하므로 별도 시간대 설정은 필요 없습니다.
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     return `${hours}:${minutes}`;
 }
 
-// (헬퍼 3) 가장 확률이 높은 표정 찾기 (원본 로직)
+// =======================================================
+// [⭐ 수정된 핵심 로직] (헬퍼 3) - 방법 2: Neutral 무시
+// =======================================================
 function getTopExpression(expressions) {
-    return Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+    
+    // 1. expressions 객체를 복사합니다.
+    const expressionsWithoutNeutral = { ...expressions };
+    
+    // 2. 복사된 객체에서 'neutral' 키를 삭제합니다.
+    delete expressionsWithoutNeutral.neutral;
+    
+    // 3. 'neutral'이 제거된 나머지 6개 표정 중에서 1등을 찾습니다.
+    let topEmotion = 'neutral'; // 기본값은 neutral
+    let maxProb = 0.0;
+
+    for (const [emotion, prob] of Object.entries(expressionsWithoutNeutral)) {
+        if (prob > maxProb) {
+            maxProb = prob;
+            topEmotion = emotion;
+        }
+    }
+    
+    // 4. [중요]
+    // 1등을 한 감정 점수가 0.1 (10%)도 안된다면,
+    // (즉, 정말로 무표정일 때) 'neutral'을 반환합니다.
+    if (maxProb < 0.1) { // 10% 미만은 무시
+        return 'neutral';
+    }
+
+    return topEmotion;
 }
 
 
