@@ -17,7 +17,6 @@
             position: relative;
             border: 2px solid white;
         }
-        /* 캔버스와 비디오를 겹침 */
         video, canvas {
             position: absolute;
             top: 0;
@@ -44,115 +43,106 @@
         <div id="message">얼굴을 찾는 중...</div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/clmtrackr@1.1.2/build/clmtrackr.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/clmtrackr@1.1.2/models/model_pca_20_svm.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/auduno/clmtrackr/examples/js/emotion_classifier.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/auduno/clmtrackr/examples/js/emotionmodel.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/clmtrackr@1.1.2/build/clmtrackr.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/clmtrackr@1.1.2/models/model_pca_20_svm.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/gh/auduno/clmtrackr/examples/js/emotion_classifier.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/gh/auduno/clmtrackr/examples/js/emotionmodel.js" defer></script>
 
     <script>
-        // =======================================================
-        // [⭐ 수정된 부분]
-        // 모든 외부 라이브러리가 로드된 후 스크립트가 실행되도록
-        // window.onload로 전체 코드를 감쌌습니다.
-        // =======================================================
-        window.onload = function() {
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const messageEl = document.getElementById('message');
+
+        // [⭐ 수정됨] 'defer'가 작동하려면 코드가 바로 실행되면 안 됩니다.
+        // 비디오가 켜지는 시점을 기준으로 모든 것을 시작하도록 변경합니다.
         
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            const messageEl = document.getElementById('message');
-
-            // 1. 얼굴 추적기(Tracker) 초기화
-            const ctracker = new clmtrackr.tracker({
-                model: pModel // 위에서 로드한 'model_pca_20_svm.js'의 모델
+        // 1. 웹캠 시작
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                video.srcObject = stream;
+                video.play();
+                // 비디오가 재생되면 -> 모델 초기화 및 추적 시작
+                video.addEventListener('playing', startApp);
+            })
+            .catch(function(err) {
+                console.error("웹캠 오류:", err);
+                messageEl.innerText = "웹캠을 찾을 수 없습니다.";
             });
-            
-            // 2. 표정 분류기(Emotion Classifier) 초기화 (변수명 충돌 해결됨)
-            const myClassifier = new emotionClassifier(); 
-            myClassifier.init(emotionModel); 
 
-            // 3. 웹캠 시작
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(function(stream) {
-                    video.srcObject = stream;
-                    video.play();
-                    // 비디오가 재생되면 추적 시작
-                    video.addEventListener('playing', startTracking);
-                })
-                .catch(function(err) {
-                    console.error("웹캠 오류:", err);
-                    messageEl.innerText = "웹캠을 찾을 수 없습니다.";
+        // 2. 앱 메인 로직
+        function startApp() {
+            // 이 시점에는 defer된 스크립트가 모두 로드되었어야 합니다.
+            try {
+                // 2-1. 얼굴 추적기(Tracker) 초기화
+                const ctracker = new clmtrackr.tracker({
+                    model: pModel 
                 });
-
-            function startTracking() {
-                // clmtrackr 시작
                 ctracker.init(pModel);
                 ctracker.start(video);
                 
-                // 그리기 루프 시작
-                drawLoop();
+                // 2-2. 표정 분류기(Emotion Classifier) 초기화
+                const myClassifier = new emotionClassifier(); 
+                myClassifier.init(emotionModel); 
+
+                // 2-3. 그리기 루프 시작
+                drawLoop(ctracker, myClassifier);
+                
+            } catch (err) {
+                // defer로도 clmtrackr을 못 찾는 경우
+                console.error("라이브러리 초기화 실패:", err);
+                messageEl.innerText = "라이브러리 로드에 실패했습니다.";
             }
+        }
 
-            function drawLoop() {
-                // 계속해서 다음 프레임 요청
-                requestAnimationFrame(drawLoop);
+        // 3. 그리기 루프
+        function drawLoop(ctracker, myClassifier) {
+            requestAnimationFrame(() => drawLoop(ctracker, myClassifier)); // 재귀 호출
 
-                // 캔버스 초기화
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const positions = ctracker.getCurrentPosition();
 
-                // 현재 얼굴 추적 위치 가져오기
-                const positions = ctracker.getCurrentPosition();
-
-                if (positions) {
-                    // (옵션) 얼굴에 랜드마크 그리기
-                    ctracker.draw(canvas);
-
-                    // --- 표정 감지 ---
-                    const emotionData = myClassifier.getEmotion(ctracker.getCurrentParameters()); 
-                    
-                    if (emotionData && emotionData.emotion) {
-                        // 가장 확률이 높은 표정 찾기
-                        let topEmotion = "";
-                        let maxScore = 0;
-                        for (let i = 0; i < emotionData.emotions.length; i++) {
-                            if (emotionData.emotions[i].value > maxScore) {
-                                maxScore = emotionData.emotions[i].value;
-                                topEmotion = emotionData.emotions[i].emotion;
-                            }
+            if (positions) {
+                ctracker.draw(canvas);
+                const emotionData = myClassifier.getEmotion(ctracker.getCurrentParameters()); 
+                
+                if (emotionData && emotionData.emotion) {
+                    let topEmotion = "";
+                    let maxScore = 0;
+                    for (let i = 0; i < emotionData.emotions.length; i++) {
+                        if (emotionData.emotions[i].value > maxScore) {
+                            maxScore = emotionData.emotions[i].value;
+                            topEmotion = emotionData.emotions[i].emotion;
                         }
-
-                        // 문구 업데이트
-                        updateMessage(topEmotion);
-                    } else {
-                        messageEl.innerText = "얼굴 추적 중...";
                     }
-
+                    updateMessage(topEmotion);
                 } else {
-                    // 얼굴을 못 찾았을 때
-                    messageEl.innerText = "얼굴을 찾는 중... (천천히 움직여주세요)";
+                    messageEl.innerText = "얼굴 추적 중...";
                 }
+            } else {
+                messageEl.innerText = "얼굴을 찾는 중... (천천히 움직여주세요)";
             }
-            
-            function updateMessage(emotion) {
-                switch (emotion) {
-                    case 'happy':
-                        messageEl.innerText = '즐거워 보이네요!';
-                        break;
-                    case 'sad':
-                        messageEl.innerText = '슬퍼 보입니다.';
-                        break;
-                    case 'angry':
-                        messageEl.innerText = '화가 났나요?';
-                        break;
-                    case 'surprised':
-                        messageEl.innerText = '놀란 표정이네요!';
-                        break;
-                    default:
-                        messageEl.innerText = '표정을 읽는 중...';
-                }
-            }
+        }
         
-        } // <-- window.onload의 닫는 괄호
+        // 4. 문구 업데이트
+        function updateMessage(emotion) {
+            switch (emotion) {
+                case 'happy':
+                    messageEl.innerText = '즐거워 보이네요!';
+                    break;
+                case 'sad':
+                    messageEl.innerText = '슬퍼 보입니다.';
+                    break;
+                case 'angry':
+                    messageEl.innerText = '화가 났나요?';
+                    break;
+                case 'surprised':
+                    messageEl.innerText = '놀란 표정이네요!';
+                    break;
+                default:
+                    messageEl.innerText = '표정을 읽는 중...';
+            }
+        }
     </script>
 </body>
 </html>
